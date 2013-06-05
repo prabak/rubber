@@ -1,0 +1,6 @@
+node_server_version: v0.10.5
+node_prefix: /usr/bin
+
+roles:
+  node:
+    packages: [build-essential, openssl, libssl-dev, pkg-config]

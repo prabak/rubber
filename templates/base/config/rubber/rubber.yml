@@ -29,6 +29,12 @@ domain: foo.com
 # also be pushed to remote host at Rubber.root/config/rubber/rubber-secret.yml
 #
 # rubber_secret: "#{File.expand_path('~') + '/.ec2' + (Rubber.env == 'production' ? '' : '_dev') + '/rubber-secret.yml' rescue ''}"
+rubber_secret: "#{File.expand_path('~') + '/.ec2' + '/#{Rubber.env}-rubber-secret.yml' rescue ''}"
+
+# The following are values used for is obtained from the {Rubber.env}-rubber-secret.yml file
+db_info:
+  username: "#{app_database_username}"
+  password: "#{app_database_password}"
 
 # OPTIONAL: Encryption key that was used to obfuscate the contents of rubber-secret.yml with "rubber util:obfuscation" 
 # Not that much better when stored in here, but you could use a ruby snippet in here to fetch it from a key server or something
@@ -52,12 +58,16 @@ cloud_providers:
     # ap-southeast-2
     #
     region: us-east-1
-    
+
+    # REQUIRED The AWS availability zone you want to use.
+    # Options are based on the region selected above
+    availability_zone: us-east-1a
+
     # REQUIRED The amazon keys and account ID (digits only, no dashes) used to access the AWS API
     #
-    access_key: XXX
-    secret_access_key: YYY
-    account: 'ZZZ'
+    access_key: "#{aws_access_key_id}"
+    secret_access_key: "#{aws_secret_access_key}"
+    account: "#{aws_account}"
 
     # REQUIRED:  The name of the amazon keypair and location of its private key
     #
@@ -357,6 +367,7 @@ stop_on_error_cmd: "function error_exit { exit 99; }; trap error_exit ERR"
 # a sub level to the config under roles, environments and hosts.  The precedence is host, environment, role
 # e.g. to install mysql only on db role, and awstats only on web01:
 
+# See http://stackoverflow.com/questions/10935578/using-the-rubber-gem-to-deploy-on-different-types-of-instances
 # OPTIONAL: Role specific overrides
 # roles:
 #   somerole:

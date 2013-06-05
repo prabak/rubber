@@ -1,5 +1,6 @@
 if Rubber::Util::is_bundler?
-  append_to_file "Gemfile", "gem 'rubber'\n"
+  # Prabakar: I have modeified the rubber gem. Don't append it. Use the custom gem
+  # append_to_file "Gemfile", "gem 'rubber'\n"
   
   # for cron-sh
   append_to_file 'Gemfile', "gem 'open4'\n"
