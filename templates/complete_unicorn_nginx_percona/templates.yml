@@ -1,4 +1,0 @@
-description: A fairly complete and scalable percona mysql deployment setup using unicorn/nginx
-dependent_templates:
-  - complete_unicorn_nginx
-  - percona

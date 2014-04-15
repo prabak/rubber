@@ -1,5 +1,0 @@
-description: A fairly complete and scalable mysql deployment setup using nginx/unicorn/elasticsearch
-dependent_templates:
-  - complete_unicorn_nginx_mysql
-  - elasticsearch
-  - node
