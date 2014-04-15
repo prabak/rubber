@@ -1,23 +1,22 @@
-require 'fog'
+require 'rubber/cloud/fog'
 
 module Rubber
   module Cloud
-    class Generic < Base
+    class Generic < Fog
       MUTEX = Mutex.new
-
-      attr_reader :storage_provider
 
       def initialize(env, capistrano)
         # TODO (nirvdrum 05/23/13): This is here until the storage provider stuff is cleaned up.  That's why this class inherits from Base rather than Fog.
         if env.cloud_providers && env.cloud_providers.aws
           storage_credentials = {
-            :provider => 'AWS',
-            :aws_access_key_id => env.cloud_providers.aws.access_key,
-            :aws_secret_access_key => env.cloud_providers.aws.secret_access_key
+              :provider => 'AWS',
+              :aws_access_key_id => env.cloud_providers.aws.access_key,
+              :aws_secret_access_key => env.cloud_providers.aws.secret_access_key,
+              :path_style => true
           }
+          storage_credentials[:region] = env.cloud_providers.aws.region
 
           env['storage_credentials'] = storage_credentials
-          @storage_provider = ::Fog::Storage.new(Rubber::Util.symbolize_keys(env.storage_credentials))
         end
 
         super(env, capistrano)
@@ -34,7 +33,7 @@ module Rubber
         instance[:external_ip] = capistrano.rubber.get_env('EXTERNAL_IP', "External IP address for host '#{instance_alias}'", true)
         instance[:internal_ip] = capistrano.rubber.get_env('INTERNAL_IP', "Internal IP address for host '#{instance_alias}'", true, instance[:external_ip])
         instance[:provider] = 'generic'
-        instance[:platform] = 'linux'
+        instance[:platform] = Rubber::Platforms::LINUX
 
         Generic.add_instance(instance)
 

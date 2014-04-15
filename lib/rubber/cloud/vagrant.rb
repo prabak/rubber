@@ -28,6 +28,7 @@ module Rubber
           Generic.instances.each do |instance|
             if instance[:id] == instance_id
               instance[:state] = state
+              instance[:provider] = 'vagrant'
             end
           end
 
@@ -36,13 +37,19 @@ module Rubber
           instance = {}
           instance[:id] = instance_id
           instance[:state] = state
+          instance[:external_ip] = capistrano.rubber.get_env('EXTERNAL_IP', "External IP address for host '#{instance_id}'", true)
+          instance[:internal_ip] = capistrano.rubber.get_env('INTERNAL_IP', "Internal IP address for host '#{instance_id}'", true, instance[:external_ip])
+          instance[:provider] = 'vagrant'
 
           [instance]
         end
       end
 
       def destroy_instance(instance_id)
-        system("vagrant destroy #{instance_id} --force")
+        # If it's being run from vagrant, then 'vagrant destroy' must have been called already, so no need for us to do it.
+        unless ENV.has_key?('RUN_FROM_VAGRANT')
+          system("vagrant destroy #{instance_id} --force")
+        end
       end
 
       def stop_instance(instance, force=false)

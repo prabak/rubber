@@ -367,7 +367,7 @@ namespace :rubber do
       instance_item.root_device_type = instance[:root_device_type]
       rubber_instances.save()
 
-      unless instance_item.windows?
+      if instance_item.linux?
         # weird cap/netssh bug, sometimes just hangs forever on initial connect, so force a timeout
         begin
           Timeout::timeout(30) do
@@ -375,6 +375,7 @@ namespace :rubber do
 
             # turn back on root ssh access if we are using root as the capistrano user for connecting
             enable_root_ssh(instance_item.external_ip, fetch(:initial_ssh_user, 'ubuntu')) if user == 'root'
+
             # force a connection so if above isn't enabled we still timeout if initial connection hangs
             direct_connection(instance_item.external_ip) do
               run "echo"
@@ -439,8 +440,8 @@ namespace :rubber do
     end
 
     if instance_item.volumes
-      value = Capistrano::CLI.ui.ask("Instance has persistent volumes, do you want to destroy them? [y/N]?: ") unless force
-      if value =~ /^y/ || force
+      value = Capistrano::CLI.ui.ask("Instance has persistent volumes, do you want to destroy them? [y/N]?: ") unless force || cloud.should_destroy_volume_when_instance_destroyed?
+      if value =~ /^y/ || force || cloud.should_destroy_volume_when_instance_destroyed?
         instance_item.volumes.clone.each do |volume_id|
           destroy_volume(volume_id)
         end

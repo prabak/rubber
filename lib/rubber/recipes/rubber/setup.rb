@@ -6,11 +6,30 @@ namespace :rubber do
     Bootstraps instances by setting timezone, installing packages and gems
   DESC
   task :bootstrap do
+    # This special piece of Hell is designed to work around callback lifecyle issues and problems associated with
+    # remounting the :deploy_to directory.  The problem is that depending on the filesystem type and whether LLVM is
+    # used, we may need to install packages before we can setup volumes.  However, most end user custom installation
+    # tasks will be configured as "after 'rubber:install_packages'", meaning they'll trigger before the volumes are set
+    # up. While this is safe, it can be very costly.  If :deploy_to is set to '/mnt/myapp-production', for instance,
+    # and we mount a new volume to /mnt, then everything in /mnt will go away and need to be reconstituted.  Rubber
+    # ensures that the correct thing will happen, so there's no correctness issue.  But, if any of those callbacks ran
+    # something like :update_code_for_bootstrap, then several costly operations will be run twice, such as uploading
+    # the code to be deployed and bundle installing gems.  The first time will be in that callback, the second time
+    # will be as part of the normal deploy, after /mnt has been remounted and thus, cleared.
+    #
+    # In order to avoid effectively deploying the app twice in many circumstances, we rebind all
+    # "after 'rubber:install_packages'" callbacks to be "after 'rubber:setup_volumes'".  This allows end-user
+    # configuration to still hook after package installation for normal case operation, while allowing rubber to run
+    # semi-performantly when bootstrapping.
+
+    rebind_after_install_packages_callbacks('rubber:setup_volumes')
+
     link_bash
     set_timezone
     enable_multiverse
-    upgrade_packages
+    configure_package_manager_mirror
     install_core_packages
+    upgrade_packages
     install_packages
     setup_volumes
     setup_gem_sources
@@ -18,22 +37,68 @@ namespace :rubber do
     deploy.setup
   end
 
+  def rebind_after_install_packages_callbacks(new_after_task)
+    install_package_task = find_task(:install_packages)
+
+    after_install_packages_callbacks = []
+    callbacks[:after].delete_if { |c| after_install_packages_callbacks << c if c.applies_to?(install_package_task) }
+
+    after_install_packages_callbacks.each { |c| after(new_after_task, c.source) }
+  end
+
   # Sets up instance to allow root access (e.g. recent canonical AMIs)
   def enable_root_ssh(ip, initial_ssh_user)
     # Capistrano uses the :password variable for sudo commands.  Since this setting is generally used for the deploy user,
     # but we need it this one time for the initial SSH user, we need to swap out and restore the password.
     #
-    # We special-case the 'ubuntu' user since Amazon doesn't since the Canonical AMIs on EC2 don't set the password for
+    # We special-case the 'ubuntu' user since the Canonical AMIs on EC2 don't set the password for
     # this account, making any password prompt potentially confusing.
     orig_password = fetch(:password)
-    set(:password, initial_ssh_user == 'ubuntu' || ENV.has_key?('RUN_FROM_VAGRANT') ? nil : Capistrano::CLI.password_prompt("Password for #{initial_ssh_user} @ #{ip}: "))
+    initial_ssh_password = fetch(:initial_ssh_password, nil)
+
+    if initial_ssh_user == 'ubuntu' || ENV.has_key?('RUN_FROM_VAGRANT')
+      set(:password, nil)
+    elsif initial_ssh_password
+      set(:password, initial_ssh_password)
+    else
+      set(:password, Capistrano::CLI.password_prompt("Password for #{initial_ssh_user} @ #{ip}: "))
+    end
+
+    task :_ensure_key_file_present, :hosts => "#{initial_ssh_user}@#{ip}" do
+      public_key_filename = "#{cloud.env.key_file}.pub"
+
+      if File.exists?(public_key_filename)
+        public_key = File.read(public_key_filename).chomp
+
+        rubber.sudo_script 'ensure_key_file_present', <<-ENDSCRIPT
+          mkdir -p ~/.ssh
+          touch ~/.ssh/authorized_keys
+          chmod 600 ~/.ssh/authorized_keys
+
+          if ! grep -q '#{public_key}' .ssh/authorized_keys; then
+            echo '#{public_key}' >> .ssh/authorized_keys
+          fi
+        ENDSCRIPT
+      end
+    end
 
     task :_allow_root_ssh, :hosts => "#{initial_ssh_user}@#{ip}" do
       rsudo "mkdir -p /root/.ssh && cp /home/#{initial_ssh_user}/.ssh/authorized_keys /root/.ssh/"
     end
 
+    task :_disable_password_based_ssh_login, :hosts => "#{initial_ssh_user}@#{ip}" do
+      rubber.sudo_script 'disable_password_based_ssh_login', <<-ENDSCRIPT
+        if ! grep -q 'PasswordAuthentication no' /etc/ssh/sshd_config; then
+          echo 'PasswordAuthentication no' >> /etc/ssh/sshd_config
+          service ssh restart
+        fi
+      ENDSCRIPT
+    end
+
     begin
+      _ensure_key_file_present
       _allow_root_ssh
+      _disable_password_based_ssh_login if cloud.should_disable_password_based_ssh_login?
     rescue ConnectionError => e
       if e.message =~ /Net::SSH::AuthenticationFailed/
         logger.info "Can't connect as user #{initial_ssh_user} to #{ip}, assuming root allowed"
@@ -89,7 +154,7 @@ namespace :rubber do
       # don't add unqualified hostname in local hosts file since user may be
       # managing multiple domains with same aliases
       hosts_data = [ic.full_name, ic.external_host, ic.internal_host]
-      
+
       # add the ip aliases for web tools hosts so we can map internal tools
       # to their own vhost to make proxying easier (rewriting url paths for
       # proxy is a real pain, e.g. '/graphite/' externally to '/' on the
@@ -99,17 +164,22 @@ namespace :rubber do
           hosts_data << "#{name}-#{ic.full_name}"
         end
       end
-      
+
       local_hosts << ic.external_ip << ' ' << hosts_data.join(' ') << "\n"
     end
     local_hosts << delim << "\n"
 
     # Write out the hosts file for this machine, use sudo
-    filtered = File.read(hosts_file).gsub(/^#{delim}.*^#{delim}\n?/m, '')
-    logger.info "Writing out aliases into local machines #{hosts_file}, sudo access needed"
-    Rubber::Util::sudo_open(hosts_file, 'w') do |f|
-      f.write(filtered)
-      f.write(local_hosts)
+    existing = File.read(hosts_file)
+    filtered = existing.gsub(/^#{delim}.*^#{delim}\n?/m, '')
+
+    # only write out if it has changed
+    if existing != (filtered + local_hosts)
+      logger.info "Writing out aliases into local machines #{hosts_file}, sudo access needed"
+      Rubber::Util::sudo_open(hosts_file, 'w') do |f|
+        f.write(filtered)
+        f.write(local_hosts)
+      end
     end
   end
 
@@ -124,10 +194,10 @@ namespace :rubber do
     # Generate /etc/hosts contents for the remote instance from instance config
     delim = "## rubber config #{Rubber.env}"
     remote_hosts = []
-    
+
     rubber_instances.each do |ic|
       hosts_data = [ic.internal_ip, ic.full_name, ic.name, ic.external_host, ic.internal_host]
-      
+
       # add the ip aliases for web tools hosts so we can map internal tools
       # to their own vhost to make proxying easier (rewriting url paths for
       # proxy is a real pain, e.g. '/graphite/' externally to '/' on the
@@ -137,23 +207,33 @@ namespace :rubber do
           hosts_data << "#{name}-#{ic.full_name}"
         end
       end
-      
+
       remote_hosts << hosts_data.join(' ')
     end
-    
+
     if rubber_instances.size > 0
-      
+
       replace="#{delim}\\n#{remote_hosts.join("\\n")}\\n#{delim}"
-      
-      rubber.sudo_script 'setup_remote_aliases', <<-ENDSCRIPT
+
+      setup_remote_aliases_script = <<-ENDSCRIPT
         sed -i.bak '/#{delim}/,/#{delim}/c #{replace}' /etc/hosts
         if ! grep -q "#{delim}" /etc/hosts; then
           echo -e "#{replace}" >> /etc/hosts
         fi
       ENDSCRIPT
-      
+
+      # If an SSH gateway is being used to deploy to the cluster, we need to ensure that gateway has an updated /etc/hosts
+      # first, otherwise it won't be able to resolve the hostnames for the other servers we need to connect to.
+      gateway = fetch(:gateway, nil)
+      if gateway
+        rubber.sudo_script 'setup_remote_aliases', setup_remote_aliases_script, :hosts => gateway
+      end
+
+      rubber.sudo_script 'setup_remote_aliases', setup_remote_aliases_script
+
       # Setup hostname on instance so shell, etcs have nice display
       rsudo "echo $CAPISTRANO:HOST$ > /etc/hostname && hostname $CAPISTRANO:HOST$"
+
       # Newer ubuntus ec2-init script always resets hostname, so prevent it
       rsudo "mkdir -p /etc/ec2-init && echo compat=0 > /etc/ec2-init/is-compat-env"
     end
@@ -162,7 +242,7 @@ namespace :rubber do
     # /etc/resolv.conf to add search domain
     # ~/.ssh/options to setup user/host/key aliases
   end
-  
+
   desc <<-DESC
     Sets up aliases in dynamic dns provider for instance hostnames based on contents of instance.yml.
   DESC
@@ -175,7 +255,7 @@ namespace :rubber do
   def record_key(record)
     "#{record[:host]}.#{record[:domain]} #{record[:type]}"
   end
-  
+
   def convert_to_new_dns_format(records)
     record = {}
     records.each do |r|
@@ -200,10 +280,10 @@ namespace :rubber do
   required_task :setup_dns_records do
     records = rubber_env.dns_records
     if records && rubber_env.dns_provider
-      
+
       provider_name = rubber_env.dns_provider
       provider = Rubber::Dns::get_provider(provider_name, rubber_env)
-      
+
       # records in rubber_env.dns_records can either have a value which
       # is an array, or multiple equivalent (same host+type)items with
       # value being a string, so try and normalize them
@@ -222,7 +302,7 @@ namespace :rubber do
       precords = domains.collect {|d| provider.find_host_records(:host => '*', :type => '*', :domain => d) }.flatten
       precords.each do |record|
         key = record_key(record)
-        raise "unmerged provider records" if provider_records[key] 
+        raise "unmerged provider records" if provider_records[key]
         provider_records[key] = record
       end
 
@@ -255,18 +335,28 @@ namespace :rubber do
 
     end
   end
-  
+
   desc <<-DESC
     Exports dns records from your provider into the format readable by rubber in rubber-dns.yml
   DESC
   required_task :export_dns_records do
     if rubber_env.dns_provider
-      
+
       provider_name = rubber_env.dns_provider
       provider = Rubber::Dns::get_provider(provider_name, rubber_env)
-      
+
       provider_records = provider.find_host_records(:host => '*', :type => '*', :domain => rubber_env.domain)
       puts({'dns_records' => provider_records.collect {|r| Rubber::Util.stringify_keys(r)}}.to_yaml)
+    end
+  end
+
+  desc <<-DESC
+    Updates the mirror used for the primary packages installed by the package manager.
+  DESC
+  task :configure_package_manager_mirror do
+    if rubber_env.package_manager_mirror
+      # This will swap out deb lines that point at a URL while skipping over sources like "deb cdrom".
+      rsudo "sed -i.bak -r \"s/(deb|deb-src) [^ :]+:\\/\\/[^ ]+ (.*)/\\1 #{rubber_env.package_manager_mirror.gsub('/', '\\/')} \\2/g\" /etc/apt/sources.list"
     end
   end
 
@@ -306,9 +396,13 @@ namespace :rubber do
   DESC
   task :install_core_packages do
     core_packages = [
-                      'python-software-properties', # Needed for add-apt-repository, which we use for adding PPAs.
-                       'bc'                         # Needed for comparing version numbers in bash, which we do for various setup functions.
-                    ]
+        'python-software-properties', # Needed for add-apt-repository, which we use for adding PPAs.
+        'bc',                         # Needed for comparing version numbers in bash, which we do for various setup functions.
+        'update-notifier-common',     # Needed for notifying us when a package upgrade requires a reboot.
+        'scsitools'                   # Needed to rescan SCSI channels for any added devices.
+    ]
+
+    rsudo "apt-get -q update"
     rsudo "export DEBIAN_FRONTEND=noninteractive; apt-get -q -o Dpkg::Options::=--force-confold -y --force-yes install #{core_packages.join(' ')}"
   end
 
@@ -383,7 +477,7 @@ namespace :rubber do
       end
     end
   ENDSCRIPT
-  
+
   desc <<-DESC
     Setup ruby gems sources. Set 'gemsources' in rubber.yml to \
     be an array of URI strings.
@@ -425,7 +519,7 @@ namespace :rubber do
      fi
     ENDSCRIPT
   end
-  
+
   desc <<-DESC
     Enable the ubuntu multiverse source for getting packages like
     ec2-ami-tools used for bundling images
@@ -439,19 +533,20 @@ namespace :rubber do
       fi
     ENDSCRIPT
   end
-  
+
   def update_dyndns(instance_item)
     env = rubber_cfg.environment.bind(instance_item.role_names, instance_item.name)
     if env.dns_provider
       provider = Rubber::Dns::get_provider(env.dns_provider, env)
       provider.update(instance_item.name, instance_item.external_ip)
-      
+
       # add the ip aliases for web tools hosts so we can map internal tools
       # to their own vhost to make proxying easier (rewriting url paths for
       # proxy is a real pain, e.g. '/graphite/' externally to '/' on the
       # graphite web app)
       if instance_item.role_names.include?('web_tools')
         Array(rubber_env.web_tools_proxies).each do |name, settings|
+          name = name.gsub('_', '-')
           provider.update("#{name}-#{instance_item.name}", instance_item.external_ip)
         end
       end
@@ -463,7 +558,7 @@ namespace :rubber do
     if env.dns_provider
       provider = Rubber::Dns::get_provider(env.dns_provider, env)
       provider.destroy(instance_item.name)
-      
+
       # add the ip aliases for web tools hosts so we can map internal tools
       # to their own vhost to make proxying easier (rewriting url paths for
       # proxy is a real pain, e.g. '/graphite/' externally to '/' on the
@@ -492,14 +587,18 @@ namespace :rubber do
 
     rsudo "apt-get -q update"
     if upgrade
-      rsudo "export DEBIAN_FRONTEND=noninteractive; apt-get -q -o Dpkg::Options::=--force-confold -y --force-yes dist-upgrade"
+      if ENV['NO_DIST_UPGRADE']
+        rsudo "export DEBIAN_FRONTEND=noninteractive; apt-get -q -o Dpkg::Options::=--force-confold -y --force-yes upgrade"
+      else
+        rsudo "export DEBIAN_FRONTEND=noninteractive; apt-get -q -o Dpkg::Options::=--force-confold -y --force-yes dist-upgrade"
+      end
     else
       rsudo "export DEBIAN_FRONTEND=noninteractive; apt-get -q -o Dpkg::Options::=--force-confold -y --force-yes install $CAPISTRANO:VAR$", opts
     end
-    
+
     maybe_reboot
   end
-  
+
   def multi_capture(cmd, opts={})
     mutex = Mutex.new
     host_data = {}
@@ -512,9 +611,9 @@ namespace :rubber do
         end
       end
     end
-    return host_data    
+    return host_data
   end
-  
+
   def maybe_reboot
     reboot_needed = multi_capture("echo $(ls /var/run/reboot-required 2> /dev/null)")
     reboot_hosts = reboot_needed.collect {|k, v| v.strip.size > 0 ? k : nil}.compact.sort
@@ -532,10 +631,12 @@ namespace :rubber do
         ENV['REBOOT'] = 'y'
         logger.info "Updates require a reboot on hosts #{reboot_hosts.inspect}"
       end
-      
+
       reboot = get_env('REBOOT', "Updates require a reboot on hosts #{reboot_hosts.inspect}, reboot [y/N]?", false)
+      ENV['REBOOT'] = reboot # `get_env` chomps the REBOOT value of the env, so reset it here so the value is retained across multiple calls.
+
       reboot = (reboot =~ /^y/)
-      
+
       if reboot
 
         logger.info "Rebooting ..."
@@ -547,7 +648,7 @@ namespace :rubber do
           # swallow exception since there is a chance
           # net:ssh throws an Exception
         end
-        
+
         sleep 30
 
         reboot_hosts.each do |host|
@@ -556,16 +657,16 @@ namespace :rubber do
           end
           logger.info "#{host} completed reboot"
         end
-        
+
       end
-      
+
       # could take a while to reboot (or get answer from prompt), so
       # we need to rebuild all capistrano connections in case they timed out
       teardown_connections_to(sessions.keys)
-      
+
     end
   end
-        
+
   def custom_package(url_base, name, ver, install_test)
     rubber.sudo_script "install_#{name}", <<-ENDSCRIPT
       if [[ #{install_test} ]]; then
@@ -657,7 +758,7 @@ namespace :rubber do
       end
       expanded_gem_list.join(' ')
     end
-    
+
     if opts.size > 0
       script = prepare_script('gem_helper', gem_helper_script, nil)
       rsudo "ruby #{script} #{cmd} $CAPISTRANO:VAR$", opts do |ch, str, data|
