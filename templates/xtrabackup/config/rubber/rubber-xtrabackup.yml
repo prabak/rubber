@@ -1,6 +1,6 @@
 role_dependencies:
   mysql: [xtrabackup]
-  percona: [xtrabackup]  
+  percona: [xtrabackup]
 roles:
   xtrabackup:
-    packages: [xtrabackup]
+    packages: [xtrabackup, s3cmd]
