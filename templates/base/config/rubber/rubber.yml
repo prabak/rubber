@@ -1,3 +1,9 @@
+# OPTIONAL: Additional rubber file to pull config from if it exists.  This file will
+# also be pushed to remote host at Rubber.root/config/rubber/rubber-secret.yml
+# This config file should store all the passwords (aws keys, passwords, etc) instead of being tracked in the git repository.
+# rubber_secret: "#{File.expand_path('~') + '/.ec2' + (Rubber.env == 'production' ? '' : '_dev') + '/rubber-secret.yml' rescue ''}"
+rubber_secret: "#{File.expand_path('~') + '/.ec2' + '/#{Rubber.env}-rubber-secret.yml' rescue ''}"
+
 # REQUIRED: The name of your application
 app_name: your_app_name
 
@@ -10,8 +16,8 @@ admin_email: "root@#{full_host}"
 
 # OPTIONAL: If not set, you won't be able to access web_tools
 # server (graphite, graylog, monit status, haproxy status, etc)
-# web_tools_user: admin
-# web_tools_password: sekret
+# web_tools_user: "#{web_admin_username}"
+# web_tools_password: "#{web_admin_password}"
 
 # REQUIRED: The timezone the server should be in
 timezone: US/Eastern
@@ -25,16 +31,10 @@ domain: foo.com
 # and ip when they are created.  It also allows setting up arbitrary
 # dns records (CNAME, MX, Round Robin DNS, etc)
 
-# OPTIONAL: Additional rubber file to pull config from if it exists.  This file will
-# also be pushed to remote host at Rubber.root/config/rubber/rubber-secret.yml
-#
-# rubber_secret: "#{File.expand_path('~') + '/.ec2' + (Rubber.env == 'production' ? '' : '_dev') + '/rubber-secret.yml' rescue ''}"
-rubber_secret: "#{File.expand_path('~') + '/.ec2' + '/#{Rubber.env}-rubber-secret.yml' rescue ''}"
-
 # The following are values used for is obtained from the {Rubber.env}-rubber-secret.yml file
 db_info:
-  username: "#{app_database_username}"
-  password: "#{app_database_password}"
+  username: "#{mysql_database_username}"
+  password: "#{mysql_database_password}"
 
 # OPTIONAL: Encryption key that was used to obfuscate the contents of rubber-secret.yml with "rubber util:obfuscation" 
 # Not that much better when stored in here, but you could use a ruby snippet in here to fetch it from a key server or something
