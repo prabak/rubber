@@ -2,29 +2,29 @@
 # also be pushed to remote host at Rubber.root/config/rubber/rubber-secret.yml
 # This config file should store all the passwords (aws keys, passwords, etc) instead of being tracked in the git repository.
 # rubber_secret: "#{File.expand_path('~') + '/.ec2' + (Rubber.env == 'production' ? '' : '_dev') + '/rubber-secret.yml' rescue ''}"
-rubber_secret: "#{File.expand_path('~') + '/.ec2' + '/#{Rubber.env}-rubber-secret.yml' rescue ''}"
+rubber_secret: "#{File.expand_path('~') + '/.ec2/' + Rubber.env + '-rubber-secret.yml'}"
 
 # REQUIRED: The name of your application
-app_name: your_app_name
+app_name: "#{application_name}"
 
 # REQUIRED: The system user to run your app servers as
-app_user: app
+app_user: "#{application_user}"
 
 # REQUIRED: Notification emails (e.g. monit) get sent to this address
 #
-admin_email: "root@#{full_host}"
+admin_email: "#{administrator_email}"
 
 # OPTIONAL: If not set, you won't be able to access web_tools
 # server (graphite, graylog, monit status, haproxy status, etc)
-# web_tools_user: "#{web_admin_username}"
-# web_tools_password: "#{web_admin_password}"
+web_tools_user: "#{web_admin_username}"
+web_tools_password: "#{web_admin_password}"
 
 # REQUIRED: The timezone the server should be in
-timezone: US/Eastern
+timezone: "#{application_timezone}"
 
 # REQUIRED: the domain all the instances should be associated with
 #
-domain: foo.com
+domain: "#{application_domain}"
 
 # OPTIONAL: See rubber-dns.yml for dns configuration
 # This lets rubber update a dynamic dns service with the instance alias
@@ -48,6 +48,10 @@ db_info:
 #
 cloud_providers:
   aws:
+
+    # Used by the s3-cmd to upload to AWS s3
+    gpg_passphrase: "#{aws_s3_upload_passphrase}"
+
     # REQUIRED The AWS region that you want to use.
     #
     # Options include
@@ -60,11 +64,11 @@ cloud_providers:
     # us-west-1      # US West (Northern California) Region
     # us-west-2      # US West (Oregon) Region
     #
-    region: us-east-1
+    region: "#{aws_region}"
 
     # REQUIRED The AWS availability zone you want to use.
     # Options are based on the region selected above
-    availability_zone: us-east-1a
+    availability_zone: "#{aws_availability_zone}"
 
     # REQUIRED The amazon keys and account ID (digits only, no dashes) used to access the AWS API
     #
@@ -79,25 +83,25 @@ cloud_providers:
     # extension ".pub".  The easiest way to get your hand on this is to create the
     # public key from the private key: ssh-keygen -y -f gsg-keypair > gsg-keypair.pub
     #
-    key_name: gsg-keypair
-    key_file: "#{Dir[(File.expand_path('~') rescue '/root') + '/.ec2/*' + cloud_providers.aws.key_name].first}"
+    key_name: "#{aws_key_name}"
+    key_file: "#{File.expand_path('~') + '/.ec2/' + aws_key_file}"
 
     # OPTIONAL: Needed for bundling a running instance using rubber:bundle
     #
-    # pk_file: "#{Dir[(File.expand_path('~') rescue '/root') + '/.ec2/pk-*'].first}"
-    # cert_file: "#{Dir[(File.expand_path('~') rescue '/root') + '/.ec2/cert-*'].first}"
-    # image_bucket: "#{app_name}-images"
+    pk_file: "#{File.expand_path('~') + '/.ec2/' + aws_pk_file}"
+    cert_file: "#{File.expand_path('~') + '/.ec2/' + aws_cert_file}"
+    image_bucket: "#{app_name}-aws-images"
 
     # OPTIONAL: Needed for backing up database to s3
-    # backup_bucket: "#{app_name}-backups"
+    backup_bucket: "#{Rubber.env}_#{app_name}_db_backups"
 
     # REQUIRED: the ami and instance type for creating instances
     # The Ubuntu images at http://alestic.com/ work well
     # Ubuntu 12.04 Precise instance-store 64-bit: ami-eafa5883
     #
     # m1.small or m1.large or m1.xlarge
-    image_type: c1.medium
-    image_id: ami-b6089bdf
+    image_type: "#{aws_default_image_type}"
+    image_id: "#{aws_default_image_id}"
 
     # OPTIONAL: EC2 spot instance request support.
     #
@@ -253,7 +257,7 @@ private_networks: [10.0.0.0/8]
 # OPTIONAL: The packages to install on all instances
 # You can install a specific version of a package by using a sub-array of pkg, version
 # For example, packages: [[rake, 0.7.1], irb]
-packages: [postfix, build-essential, git-core, libxslt-dev, ntp]
+packages: [postfix, build-essential, git-core, libxslt-dev, ntp, imagemagick, libmagickwand-dev, bsd-mailx]
 
 # OPTIONAL: The package manager mirror to use for installation of primary packages (i.e., those not explicitly
 # sourced from a different repository).  If not specified, whatever mirror configured by your server image
