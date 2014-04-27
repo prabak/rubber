@@ -7,6 +7,12 @@ rubber_secret: "#{File.expand_path('~') + '/.ec2/' + Rubber.env + '-rubber-secre
 # REQURED: the director to mount to
 mount_directory: "#{application_mount_directory}"
 
+# REQURED: git repository location
+code_repository: "#{git_location}"
+
+# REQURED: git branch to use
+deployment_branch: "#{git_deployment_branch}"
+
 # REQUIRED: The name of your application
 app_name: "#{application_name}"
 
