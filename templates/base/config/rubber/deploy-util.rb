@@ -15,7 +15,7 @@ namespace :rubber do
             
       task_name = "_backup_db_#{selected_db_instance.full_name}".to_sym()
       task task_name, :hosts => selected_db_instance.full_name do
-        rsudo "cd #{current_path} && RUBBER_ENV=#{Rubber.env} ./script/rubber util:backup_db --directory=/mnt/db_backups --dbuser=#{rubber_env.db_user} --dbpass=#{rubber_env.db_pass} --dbname=#{rubber_env.db_name} --dbhost=#{selected_db_instance.full_name}"
+        rsudo "cd #{current_path} && RUBBER_ENV=#{Rubber.env} ./script/rubber util:backup_db --directory=#{rubber_env.mount_directory}/db_backups --dbuser=#{rubber_env.db_user} --dbpass=#{rubber_env.db_pass} --dbname=#{rubber_env.db_name} --dbhost=#{selected_db_instance.full_name}"
       end
       send task_name
     end

@@ -1,6 +1,6 @@
 <%
   @path = "/etc/profile.d/rubber.sh"
-  current_path = "/mnt/#{rubber_env.app_name}-#{Rubber.env}/current" 
+  current_path = "#{rubber_env.mount_directory}/#{rubber_env.app_name}-#{Rubber.env}/current"
 %>
 
 # convenience to simply running rails console, etc with correct env

@@ -1,5 +1,5 @@
 <%
-  @path = "/mnt/db-backup-tools/rubber-xtrabackup.sh"
+  @path = "#{rubber_env.mount_directory}/db-backup-tools/rubber-xtrabackup.sh"
 	@perms = 0755
 	@backup = false
 %>#!/bin/bash
