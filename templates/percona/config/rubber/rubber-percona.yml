@@ -18,7 +18,7 @@ db_restore_cmd: "zcat - | mysql -h %host% -u %user% --password=%pass% %name%"
 
 # REQUIRED: The directory to store the db data in
 #
-db_root_dir: "#{rubber_env.mount_directory}/mysql"
+db_root_dir: "#{mount_directory}/mysql"
 db_data_dir: "#{db_root_dir}/data"
 db_log_dir: "#{db_root_dir}/log"
 
