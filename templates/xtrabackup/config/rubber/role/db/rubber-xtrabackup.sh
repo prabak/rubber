@@ -32,6 +32,11 @@ SLAVECMD=""
 SLAVECMD="--safe-slave-backup --slave-info"
 <% end %>
 
+# Set the backupfile name using the current timestamp
+BACKUPFILE="<%=rubber_env.host%>.$(date +'%Y_%m_%d_%H_%M').tar.gz"
+
+BACKUP_BUCKET="<%=rubber_env.cloud_providers.aws.backup_bucket%>"
+
 # Lets get our command line parameters
 while getopts ":u:p:t:db:" opt; do
   case $opt in
@@ -43,9 +48,6 @@ while getopts ":u:p:t:db:" opt; do
 			;;
 		t)
 			BACKUPDIR="$OPTARG"
-			;;
-		b)
-			BACKUPFILE="$OPTARG"
 			;;
 		d)
 			DIFFERENTIALS=1
@@ -61,8 +63,8 @@ while getopts ":u:p:t:db:" opt; do
   esac
 done
 
-if [[ -z "$USERNAME" || -z "$BACKUPDIR" || -z "$BACKUPFILE" ]]; then
-	echo "Required parameters missing. Please supply -u (database username), -t (backup directory) and -b (backup file)"
+if [[ -z "$USERNAME" || -z "$BACKUPDIR" ]]; then
+	echo "Required parameters missing. Please supply -u (database username), -t (backup directory)"
 	exit 1
 fi
 
@@ -73,6 +75,7 @@ differential_backup () {
 	if [ ! -d "$BASEDIR" ]; then
 		echo "$BASEDIR does not exist. Running full base backup..."
 		clean_base_backup
+		upload_to_s3
 		echo "Success. Exiting."
 		exit 0
 	else
@@ -84,6 +87,7 @@ differential_backup () {
 			if [ "$NEWDIFFNUM" -gt "$MAXDIFFS" ]; then
 				echo "Exceeded maximum number of differentials. Performing new base backup."
 				clean_base_backup
+				upload_to_s3
 				echo "Success. Exiting."
 				exit 0				
 			else
@@ -103,12 +107,15 @@ differential_backup () {
 				tar czf $BACKUPFILE -C $BASEDIR .
 				# Update our diff status.
 				echo $NEWDIFFNUM > "$BACKUPDIR/diffs/diff-status"
+				# upload to s3
+        upload_to_s3
 				echo "Success. exiting."
 				exit 0
 			fi
 		else
 			echo "Can't get backup status. Performing new base backup."
 			clean_base_backup
+			upload_to_s3
 			echo "Success. Exiting."
 			exit 0
 		fi
@@ -186,6 +193,18 @@ full_compressed_backup () {
 	rm -rf "$BACKUPDIR/full"	
 }
 
+upload_to_s3 () {
+  if [[ -z "$BACKUP_BUCKET" ]]; then
+    echo "S3 BACKUP_BUCKET was not defined. Not uploading to s3."
+  else
+    echo "Uploading to S3..."
+    dest="s3://$BACKUP_BUCKET/db/"
+    echo "Uploading backup $BACKUPFILE to $dest ..."
+    s3cmd put --config="<%=rubber_env.mount_directory%>/db-backup-tools/rubber-s3cmd.s3cfg" "$BACKUPFILE" "$dest"
+    echo "Finished uploading to $dest"
+  fi
+}
+
 check_backup_result () {
 	if [ -z "`tail -1 $LOGFILE | grep 'completed OK!'`" ] ; then
 	 echo "ERROR: $INNOBACKUPEX failed:"
@@ -201,10 +220,10 @@ ensure_destination_exists () {
 	mkdir -p `dirname $BACKUPFILE`
 }
 
-echo "----------------------------------"
-echo "Started innobackupex backup script"
-echo "Start: `date`"
-echo "----------------------------------"
+echo "---------------------------------- Started innobackupex backup script: `date` ----------------------------------"
+echo "USERNAME: $USERNAME"
+echo "BACKUPDIR: $BACKUPDIR"
+echo "BACKUPFILE: $BACKUPFILE"
 
 if [ ! -x "$INNOBACKUP" ]; then
  echo "$INNOBACKUP does not exist. Ensure you have bootstrapped this instance and that the xtrabackup package is installed."
@@ -241,6 +260,9 @@ if [ "$DIFFERENTIALS" -eq "1" ]; then
 else
 	echo "Running full compressed backup..."
 	full_compressed_backup
+	upload_to_s3
 	echo "Success. Exiting."
 	exit 0
 fi
+
+echo "---------------------------------- Finished innobackupex backup script: `date` ----------------------------------"
