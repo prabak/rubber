@@ -8,15 +8,15 @@ on :load do
   set :deploy_to,   "#{rubber_env.mount_directory}/#{application}-#{Rubber.env}"
   set :copy_exclude, [".bundle/*", "log/*", ".rvmrc", ".rbenv-version"] # removed ".git/*" from this list due to asset compilation code.
   set :assets_role, [:app]
+  set :branch, rubber_env.deployment_branch
+  set :repository, rubber_env.code_repository
 end
 
 # Use a simple directory tree copy here to make demo easier.
 # You probably want to use your own repository for a real app
 ssh_options[:forward_agent] = true # tell Capistrano to use agent forwarding with this command. Agent forwarding can make key management much simpler as it uses your local keys instead of keys installed on the server.
 set :scm, :git
-set :branch, rubber_env.deployment_branch
 set :deploy_via, :remote_cache # in most cases we want this options, else each deploy will do a full repository clone every time
-set :repository, rubber_env.code_repository
 set :last_revision, nil # use this variable to store the revision from git before figuring out if we need to compile the assets
 
 # Easier to do system level config as root - probably should do it through
