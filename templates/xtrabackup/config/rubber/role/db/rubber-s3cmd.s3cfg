@@ -39,4 +39,4 @@ skip_existing = False
 socket_timeout = 10
 urlencoding_mode = normal
 use_https = False
-verbosity = WARNING 
+verbosity = WARNING

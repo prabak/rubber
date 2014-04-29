@@ -389,13 +389,13 @@ staging_roles: "#{known_roles.reject {|r| r =~ /slave/ || r =~ /^db$/ }.join(','
 #             mount: /mnt/large_work_dir # The directory to mount this LVM volume to
 
 hosts:
-  deployment:
-    use_static_ip: true
+  environment_name:
+    use_static_ip: "#{aws_use_static_ip}"
     availability_zone: "#{aws_availability_zone}"
     image_type: "#{aws_default_image_type}"
     image_id: "#{aws_default_image_id}"
     volumes:
-      - size: 500 # size of vol in GBs
+      - size: "#{aws_volume_size}" # size of vol in GBs
         zone: "#{aws_availability_zone}" # zone to create volume in, needs to match host's zone
         device: /dev/sdh # OS device to attach volume to
         mount: "#{mount_directory}" # The directory to mount this volume to

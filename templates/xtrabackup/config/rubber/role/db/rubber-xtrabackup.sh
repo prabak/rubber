@@ -1,7 +1,7 @@
 <%
   @path = "#{rubber_env.mount_directory}/db-backup-tools/rubber-xtrabackup.sh"
-	@perms = 0755
-	@backup = false
+  @perms = 0755
+  @backup = false
 %>#!/bin/bash
 # 
 # Run innobackupex for databases, ensure it succeeded, and put file in place for S3 upload by Rubber.
@@ -43,15 +43,15 @@ while getopts ":u:p:t:db:" opt; do
     u)
       USERNAME="$OPTARG"
       ;;
-		p)
-			PASSWORD="$OPTARG"
-			;;
-		t)
-			BACKUPDIR="$OPTARG"
-			;;
-		d)
-			DIFFERENTIALS=1
-			;;
+    p)
+      PASSWORD="$OPTARG"
+      ;;
+    t)
+      BACKUPDIR="$OPTARG"
+      ;;
+    d)
+      DIFFERENTIALS=1
+      ;;
     \?)
       echo "Invalid option: -$OPTARG" >&2
       exit 1
@@ -64,25 +64,25 @@ while getopts ":u:p:t:db:" opt; do
 done
 
 if [[ -z "$USERNAME" || -z "$BACKUPDIR" ]]; then
-	echo "Required parameters missing. Please supply -u (database username), -t (backup directory)"
-	exit 1
+  echo "Required parameters missing. Please supply -u (database username), -t (backup directory)"
+  exit 1
 fi
 
 differential_backup () {
-	# This method will handle differential backups
-	BASEDIR="$BACKUPDIR/diffs/base"
-	
-	if [ ! -d "$BASEDIR" ]; then
-		echo "$BASEDIR does not exist. Running full base backup..."
-		clean_base_backup
-		upload_to_s3
-		echo "Success. Exiting."
-		exit 0
-	else
-		if [ -f "$BACKUPDIR/diffs/diff-status" ]; then
-			# Check current diff number
-			DIFFNUM=`cat $BACKUPDIR/diffs/diff-status`
-			# Increase diff number by one
+  # This method will handle differential backups
+  BASEDIR="$BACKUPDIR/diffs/base"
+  
+  if [ ! -d "$BASEDIR" ]; then
+    echo "$BASEDIR does not exist. Running full base backup..."
+    clean_base_backup
+    upload_to_s3
+    echo "Success. Exiting."
+    exit 0
+  else
+  	if [ -f "$BACKUPDIR/diffs/diff-status" ]; then
+  	  # Check current diff number
+  	  DIFFNUM=`cat $BACKUPDIR/diffs/diff-status`
+  	  # Increase diff number by one
 			let "NEWDIFFNUM = $DIFFNUM + 1"
 			if [ "$NEWDIFFNUM" -gt "$MAXDIFFS" ]; then
 				echo "Exceeded maximum number of differentials. Performing new base backup."
@@ -92,8 +92,8 @@ differential_backup () {
 				exit 0				
 			else
 				if [ "$NEWDIFFNUM" -eq "1" ]; then
-					# First diff, let's set the base for the diff to $BASEDIR
-					DIFFBASE=$BASEDIR
+				  # First diff, let's set the base for the diff to $BASEDIR
+				  DIFFBASE=$BASEDIR
 				else
 					DIFFBASE="$BACKUPDIR/diffs/$DIFFNUM"
 				fi
