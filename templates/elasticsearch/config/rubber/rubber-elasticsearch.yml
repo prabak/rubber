@@ -2,6 +2,7 @@ elasticsearch_version: 0.20.4
 elasticsearch_data_dir: "#{mount_directory}/elasticsearch/data"
 elasticsearch_work_dir: "#{mount_directory}/elasticsearch/work"
 elasticsearch_log_dir: "#{mount_directory}/elasticsearch/logs"
+elasticsearch_pid_file: "/var/run/elasticsearch.pid"
 elasticsearch_http_port: 9200
 
 roles:
