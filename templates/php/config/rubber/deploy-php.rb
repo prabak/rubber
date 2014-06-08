@@ -29,8 +29,6 @@ namespace :rubber do
 
     after "rubber:bootstrap", "rubber:php:bootstrap"
 
-    after "rubber:php:install", "rubber:php:restart"
-
     task :bootstrap, :roles => :php do
     end
 
@@ -41,6 +39,8 @@ namespace :rubber do
     task :stop, :roles => :php do
       rsudo "service php5-fpm stop"
     end
+
+    after "rubber:php:install", "rubber:php:restart"
 
     task :restart, :roles => :php do
       rsudo "service php5-fpm restart"
