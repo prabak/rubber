@@ -87,12 +87,12 @@ namespace :rubber do
           if [[ ! -f "/opt/graphite/bin/carbon-cache.py" ]]; then
             wget -qNP /tmp #{rubber_env.graphite_whisper_package_url}
             tar -C /tmp -zxf /tmp/#{rubber_env.graphite_whisper_package_url.gsub(/.*\//, '')}
-            cd /tmp/#{rubber_env.graphite_whisper_package_url.gsub(/.*\//, '').gsub('.tar.gz', '')}
+            cd /tmp/#{rubber_env.graphite_whisper_package}
             python setup.py install
 
             wget -qNP /tmp #{rubber_env.graphite_carbon_package_url}
             tar -C /tmp -zxf /tmp/#{rubber_env.graphite_carbon_package_url.gsub(/.*\//, '')}
-            cd /tmp/#{rubber_env.graphite_carbon_package_url.gsub(/.*\//, '').gsub('.tar.gz', '')}
+            cd /tmp/#{rubber_env.graphite_carbon_package}
             python setup.py install
 
             rm -rf /opt/graphite/storage
@@ -159,7 +159,7 @@ namespace :rubber do
           if [[ ! -d "/opt/graphite/webapp" ]]; then
             wget -qNP /tmp #{rubber_env.graphite_web_package_url}
             tar -C /tmp -zxf /tmp/#{rubber_env.graphite_web_package_url.gsub(/.*\//, '')}
-            cd /tmp/#{rubber_env.graphite_web_package_url.gsub(/.*\//, '').gsub('.tar.gz', '')}
+            cd /tmp/#{rubber_env.graphite_web_package}
             # python check-dependencies.py
             python setup.py install
           fi

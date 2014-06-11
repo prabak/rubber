@@ -28,7 +28,7 @@ role_dependencies:
   db:primary=true: [percona, percona_master]
   db: [percona, percona_slave]
 
-packages: [percona-server-client, libmysqlclient-dev]
+packages: [percona-server-client-5.6, libmysqlclient-dev]
 gems: [mysql]
 
 roles:
@@ -38,6 +38,6 @@ roles:
     db_server_id: 2
   percona:
     packages: [
-                percona-server-server,
+                percona-server-server-5.6,
                 percona-toolkit # useful mysql tools for replication
               ]

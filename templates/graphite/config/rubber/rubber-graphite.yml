@@ -7,9 +7,13 @@ graphite_storage_dir: "#{mount_directory}/graphite_storage"
 
 # uncomment out the repo version to install from given repo version
 # graphite_repo_version: 426
-graphite_whisper_package_url: https://github.com/downloads/graphite-project/whisper/whisper-0.9.10.tar.gz
-graphite_carbon_package_url: https://github.com/downloads/graphite-project/carbon/carbon-0.9.10.tar.gz
-graphite_web_package_url: https://github.com/downloads/graphite-project/graphite-web/graphite-web-0.9.10.tar.gz
+graphite_whisper_package_url: https://github.com/graphite-project/whisper/archive/0.9.12.tar.gz
+graphite_carbon_package_url: https://github.com/graphite-project/carbon/archive/0.9.12.tar.gz
+graphite_web_package_url: https://github.com/graphite-project/graphite-web/archive/0.9.12.tar.gz
+
+graphite_whisper_package: whisper-0.9.12
+graphite_carbon_package: carbon-0.9.12
+graphite_web_package: graphite-web-0.9.12
 
 web_tools_proxies:
   graphite:

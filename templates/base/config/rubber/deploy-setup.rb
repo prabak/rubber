@@ -68,6 +68,8 @@ namespace :rubber do
     after "rubber:install_packages", "rubber:base:configure_git" if scm == "git"
     task :configure_git do
       rubber.sudo_script 'configure_git', <<-ENDSCRIPT
+        git config --global pack.windowMemory 10m
+        git config pack.packSizeLimit 20m
         if [[ "#{repository}" =~ "@" ]]; then
           # Get host key for src machine to prevent ssh from failing
           rm -f ~/.ssh/known_hosts

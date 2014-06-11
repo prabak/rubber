@@ -40,7 +40,7 @@ cd <%=rubber_env.mount_directory%>/db_restore
 # Download file from amazon s3
 #cat > /mnt/archon/db_restore/current.tar.gz
 s3cmd get s3://logix.cz-test/addrbook.xml addressbook-2.xml
-s3cmd get --config="<%=rubber_env.mount_directory%>/archon/db-backup-tools/rubber-s3cmd.s3cfg" "s3://$BACKUP_BUCKET/db/$BACKUPFILE" "current.tar.gz"
+s3cmd get --config="<%=rubber_env.mount_directory%>/db-backup-tools/rubber-s3cmd.s3cfg" "s3://$BACKUP_BUCKET/db/$BACKUPFILE" "current.tar.gz"
 
 # extract the downloaded file, service mysql stop,
 # then mkdir /mnt/archon/mysql/data & /mnt/archon/mysql/log (move old ones out of the way)
